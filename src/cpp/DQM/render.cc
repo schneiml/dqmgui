@@ -1502,11 +1502,16 @@ private:
   {
     TObject *ob = objs[0].object;
     //Do normal rendering for everything but TH1*
-    if (dynamic_cast<TH2 *>(ob) ||
-        dynamic_cast<TProfile *>(ob) ||
+    if (dynamic_cast<TProfile *>(ob) ||
         dynamic_cast<TObjString *>(ob))
     {
       doRenderOrdinary(c, i, objs, numobjs, ri, nukem);
+      return;
+    }
+
+    if (dynamic_cast<TH2 *>(ob) )
+    {
+      doRenderRatio(c, i, objs, numobjs, ri, nukem);
       return;
     }
 
@@ -1703,6 +1708,72 @@ private:
                              dynamic_cast<TH1 *>(objs[n].object),
                              colors[n%colorIndex],
                              objs[n].name, nukem);
+  }
+
+  // ----------------------------------------------------------------------
+  // Render a 2D histogram as a color-coded ratio between the histogram and
+  // its reference.
+  void doRenderRatio(TCanvas &c,
+                        VisDQMImgInfo &i,
+                        VisDQMObject * objs,
+                        size_t numobjs,
+                        const VisDQMRenderInfo &ri,
+                        std::vector<TObject *> &nukem)
+  {
+    // copy all objects, such that we can safely modify ratio[0].
+    std::vector<VisDQMObject> ratio(objs, objs+numobjs);
+    
+    TH2 *ob = dynamic_cast<TH2*> (objs[0].object);
+    TH2 *ref = dynamic_cast<TH2*> (objs[0].reference);
+
+    if (!ref && numobjs > 1) {
+      ref = dynamic_cast<TH2*> (objs[1].object);
+      ratio.erase(ratio.begin()+1);
+    }
+
+    if (ob && ref) {
+      TH2 *rat = dynamic_cast<TH2*> (ob->Clone());
+      nukem.push_back(rat);
+      
+      double normfact = ob->GetEntries() / ref->GetEntries();
+      if (dynamic_cast<TProfile2D*>(ob) 
+        || (objs[0].flags & VisDQMIndex::SUMMARY_PROP_EFFICIENCY_PLOT)) {
+        normfact = 1;
+      }
+
+      rat->Divide(ob, ref, 1, normfact);
+      ratio[0].object = rat;
+      ratio[0].reference = nullptr;
+
+      double min = rat->GetMinimum(1e-2);
+      double max = rat->GetMaximum(1e2);
+      // grow axis range to be symmetrical wrt log-scale.
+      // ideally, ths should detect if a lin-override is selected.
+      if (min < (1.0/max)) max = 1.0/min;
+      if (max > (1.0/min)) min = 1.0/max;
+      rat->SetMinimum(min);
+      rat->SetMaximum(max);
+
+      // use log scale, except when the range is very small
+      // (lin and log are basically equal then, but lin has better ticks)
+      if (min < 0.90) gPad->SetLogz(1);
+
+      rat->SetOption("colz");
+      rat->GetZaxis()->SetMoreLogLabels(1);
+
+      const Int_t NRGBs = 3;
+      const Int_t NCont = 255;
+      Double_t stops[NRGBs] = { 0.00, 0.50, 1.00 };
+      Double_t red[NRGBs]   = { 0.00, .90, 1.00 };
+      Double_t green[NRGBs] = { 0.00, .90, 0.00 };
+      Double_t blue[NRGBs]  = { 1.00, .90, 0.00 };
+
+      TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
+      gStyle->SetNumberContours(NCont);
+
+    }
+
+    doRenderOrdinary(c, i, &ratio[0], numobjs, ri, nukem);
   }
 
   // ----------------------------------------------------------------------
