@@ -1688,13 +1688,16 @@ private:
     //Do normal rendering except if there is exactly one reference
     auto data_hist = dynamic_cast<TH2*>(objs[0].object);
     auto ref_hist = dynamic_cast<TH2*>(objs[0].reference);
-    if (1 //num_objects != 1 
+    if (numobjs == 2) {
+      ref_hist = dynamic_cast<TH2*> (objs[1].object);
+    }
+    if (0 //num_objects != 1 
       || !data_hist || data_hist->GetDimension() != 2
       || !ref_hist || ref_hist->GetDimension() != 2
       || ref_hist->GetNbinsX() != data_hist->GetNbinsX()
       || ref_hist->GetNbinsY() != data_hist->GetNbinsY() )
     {
-      doRenderStacked(c, i, objs, numobjs, ri, nukem);
+      doRenderOrdinary(c, i, objs, numobjs, ri, nukem);
       return;
     }
 
